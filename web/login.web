@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="blue">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= csrf_token ?>">
+
+    <title>RPG World | Acceso</title>
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg1: #07101f;
+            --bg2: #101d3c;
+            --accent: #7c9cff;
+            --accent2: #536dfe;
+            --glow: rgba(65, 113, 255, .25);
+            --text: #f7f8ff;
+            --muted: #9ba7c3;
+            --panel: rgba(10, 15, 31, .70);
+            --border: rgba(255, 255, 255, .12);
+            --field: rgba(255, 255, 255, .055);
+        }
+
+        html[data-theme="black"] {
+            --bg1: #050607;
+            --bg2: #20222a;
+            --accent: #e2e5ee;
+            --accent2: #777f94;
+            --glow: rgba(160, 170, 195, .17);
+        }
+
+        html[data-theme="pink"] {
+            --bg1: #260c25;
+            --bg2: #721d52;
+            --accent: #ff9fd3;
+            --accent2: #e64c9e;
+            --glow: rgba(255, 72, 173, .29);
+        }
+
+        html[data-theme="red"] {
+            --bg1: #210707;
+            --bg2: #65151c;
+            --accent: #ff9a9a;
+            --accent2: #ed374a;
+            --glow: rgba(255, 50, 67, .26);
+        }
+
+        html[data-theme="blue"] {
+            --bg1: #07101f;
+            --bg2: #101d3c;
+            --accent: #9bb5ff;
+            --accent2: #536dfe;
+            --glow: rgba(65, 113, 255, .25);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 32px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            font-family: Inter, "Segoe UI", Arial, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(ellipse at 15% 15%, var(--glow), transparent 45%),
+                radial-gradient(ellipse at 85% 80%, var(--glow), transparent 42%),
+                linear-gradient(135deg, var(--bg1), var(--bg2));
+            background-attachment: fixed;
+            transition: background-color .4s ease;
+        }
+
+        body::before,
+        body::after {
+            content: "";
+            position: fixed;
+            width: 340px;
+            height: 340px;
+            border-radius: 50%;
+            background: var(--glow);
+            filter: blur(85px);
+            pointer-events: none;
+            z-index: -1;
+            animation: float 12s ease-in-out infinite alternate;
+        }
+
+        body::before {
+            top: -140px;
+            left: -110px;
+        }
+
+        body::after {
+            right: -130px;
+            bottom: -160px;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+            from {
+                transform: translate3d(0, 0, 0);
+            }
+
+            to {
+                transform: translate3d(35px, -28px, 0);
+            }
+        }
+
+        .page {
+            width: 100%;
+            max-width: 450px;
+            position: relative;
+        }
+
+        .brand {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .brand-icon {
+            width: 57px;
+            height: 57px;
+            margin: 0 auto 13px;
+            display: grid;
+            place-items: center;
+            border: 1px solid rgba(255, 255, 255, .2);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .09);
+            box-shadow: 0 8px 35px var(--glow);
+            font-size: 26px;
+        }
+
+        .brand h1 {
+            font-size: 26px;
+            letter-spacing: 2px;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .brand h1 span {
+            color: var(--accent);
+        }
+
+        .brand p {
+            color: var(--muted);
+            font-size: 13px;
+            letter-spacing: .4px;
+            margin: 9px 0 0;
+        }
+
+        .auth-card {
+            padding: 30px;
+            border: 1px solid var(--border);
+            border-radius: 25px;
+            background: var(--panel);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow:
+                0 25px 80px rgba(0, 0, 0, .28),
+                inset 0 1px 0 rgba(255, 255, 255, .07);
+        }
+
+        .card-heading {
+            margin-bottom: 24px;
+        }
+
+        .card-heading h2 {
+            font-size: 23px;
+            margin: 0 0 7px;
+            letter-spacing: -.5px;
+        }
+
+        .card-heading p {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 5px;
+            border-radius: 13px;
+            background: rgba(0, 0, 0, .22);
+            border: 1px solid rgba(255, 255, 255, .06);
+            margin-bottom: 24px;
+        }
+
+        .tab {
+            border: 0;
+            border-radius: 9px;
+            padding: 12px 9px;
+            background: transparent;
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: .2s ease;
+        }
+
+        .tab.active {
+            color: white;
+            background: rgba(255, 255, 255, .12);
+            box-shadow: 0 3px 12px rgba(0, 0, 0, .13);
+        }
+
+        .tab:focus-visible,
+        button:focus-visible,
+        input:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+        }
+
+        .field {
+            margin-bottom: 17px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #dce2f2;
+            margin-bottom: 9px;
+        }
+
+        .input-wrap {
+            position: relative;
+        }
+
+        .input-wrap .field-icon {
+            position: absolute;
+            top: 50%;
+            left: 14px;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        .field input {
+            width: 100%;
+            height: 48px;
+            padding: 0 14px 0 42px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            color: var(--text);
+            background: var(--field);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+            transition: border-color .2s, box-shadow .2s;
+        }
+
+        .field input::placeholder {
+            color: #7f8aa5;
+        }
+
+        .field input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--glow);
+        }
+
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin: 2px 0 20px;
+            font-size: 12px;
+        }
+
+        .check-label {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .check-label input {
+            accent-color: var(--accent2);
+        }
+
+        .text-link {
+            color: var(--accent);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .text-link:hover {
+            text-decoration: underline;
+        }
+
+        .submit-btn {
+            width: 100%;
+            min-height: 49px;
+            border: 0;
+            border-radius: 11px;
+            background: linear-gradient(
+                110deg,
+                var(--accent2),
+                var(--accent)
+            );
+            color: #fff;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: .3px;
+            cursor: pointer;
+            box-shadow: 0 8px 25px var(--glow);
+            transition: transform .2s, filter .2s;
+        }
+
+        html[data-theme="black"] .submit-btn {
+            color: #101116;
+        }
+
+        .submit-btn:hover {
+            filter: brightness(1.09);
+            transform: translateY(-1px);
+        }
+
+        .submit-btn:disabled {
+            cursor: wait;
+            opacity: .65;
+            transform: none;
+        }
+
+        .message {
+            display: none;
+            padding: 12px 13px;
+            margin-top: 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        .message.show {
+            display: block;
+        }
+
+        .message.success {
+            background: rgba(35, 190, 125, .12);
+            border: 1px solid rgba(35, 190, 125, .32);
+            color: #8ff0c5;
+        }
+
+        .message.error {
+            background: rgba(245, 70, 90, .12);
+            border: 1px solid rgba(245, 70, 90, .32);
+            color: #ffb1bb;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            margin: 24px 0;
+            color: #7e8ba7;
+            font-size: 11px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: "";
+            height: 1px;
+            flex: 1;
+            background: var(--border);
+        }
+
+        .theme-section {
+            padding-top: 2px;
+        }
+
+        .theme-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 13px;
+        }
+
+        .theme-title strong {
+            font-size: 12px;
+        }
+
+        .theme-title span {
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .theme-options {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 9px;
+        }
+
+        .theme-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            padding: 10px 4px 8px;
+            color: var(--muted);
+            background: transparent;
+            font-family: inherit;
+            font-size: 11px;
+            cursor: pointer;
+            transition: .2s ease;
+        }
+
+        .theme-option:hover {
+            background: rgba(255, 255, 255, .05);
+        }
+
+        .theme-option.active {
+            color: var(--text);
+            background: rgba(255, 255, 255, .07);
+            border-color: var(--border);
+        }
+
+        .swatch {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, .24);
+            box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .12);
+        }
+
+        .swatch.black {
+            background: linear-gradient(135deg, #050505, #858995);
+        }
+
+        .swatch.pink {
+            background: linear-gradient(135deg, #fbc2eb, #e64999);
+        }
+
+        .swatch.red {
+            background: linear-gradient(135deg, #ff9999, #a80f25);
+        }
+
+        .swatch.blue {
+            background: linear-gradient(135deg, #8fd3f4, #4359d7);
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 23px;
+            color: #8490aa;
+            font-size: 11px;
+        }
+
+        .footer span {
+            color: var(--accent);
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 25px 13px;
+            }
+
+            .auth-card {
+                padding: 23px 19px;
+                border-radius: 20px;
+            }
+
+            .brand h1 {
+                font-size: 23px;
+            }
+
+            .card-heading h2 {
+                font-size: 21px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: .01ms !important;
+                transition-duration: .01ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <main class="page">
+
+        <header class="brand">
+            <div class="brand-icon" aria-hidden="true">✦</div>
+            <h1>RPG <span>WORLD</span></h1>
+            <p>Tu próxima aventura comienza aquí</p>
+        </header>
+
+        <section class="auth-card">
+
+            <div class="card-heading">
+                <h2 id="heading-title">¡Qué bueno verte!</h2>
+                <p id="heading-description">
+                    Inicia sesión para continuar tu aventura.
+                </p>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Acceso">
+                <button
+                    class="tab active"
+                    type="button"
+                    role="tab"
+                    id="tab-login"
+                    aria-selected="true"
+                    aria-controls="panel-login"
+                    data-tab="login">
+                    Iniciar sesión
+                </button>
+
+                <button
+                    class="tab"
+                    type="button"
+                    role="tab"
+                    id="tab-register"
+                    aria-selected="false"
+                    aria-controls="panel-register"
+                    data-tab="register">
+                    Crear cuenta
+                </button>
+            </div>
+
+            <!-- LOGIN -->
+
+            <form id="panel-login" role="tabpanel" aria-labelledby="tab-login">
+
+                <div class="field">
+                    <label for="login-identity">
+                        Usuario o correo electrónico
+                    </label>
+
+                    <div class="input-wrap">
+                        <span class="field-icon" aria-hidden="true">◎</span>
+                        <input
+                            type="text"
+                            id="login-identity"
+                            name="username"
+                            placeholder="Tu usuario o correo"
+                            autocomplete="username"
+                            maxlength="254"
+                            required>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="login-password">Contraseña</label>
+
+                    <div class="input-wrap">
+                        <span class="field-icon" aria-hidden="true">⌑</span>
+                        <input
+                            type="password"
+                            id="login-password"
+                            name="password"
+                            placeholder="Tu contraseña"
+                            autocomplete="current-password"
+                            required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <label class="check-label">
+                        <input type="checkbox" id="remember-me">
+                        Recordarme
+                    </label>
+
+                    <a class="text-link" href="#" id="forgot-link">
+                        ¿Olvidaste tu contraseña?
+                    </a>
+                </div>
+
+                <button class="submit-btn" type="submit" id="login-submit">
+                    Entrar a mi cuenta <span aria-hidden="true">→</span>
+                </button>
+
+                <div
+                    class="message"
+                    id="login-message"
+                    role="status"
+                    aria-live="polite">
+                </div>
+
+            </form>
+
+            <!-- REGISTRO -->
+
+            <form
+                id="panel-register"
+                role="tabpanel"
+                aria-labelledby="tab-register"
+                hidden>
+
+                <div class="field">
+                    <label for="register-username">Nombre de usuario</label>
+
+                    <div class="input-wrap">
+                        <span class="field-icon" aria-hidden="true">◎</span>
+                        <input
+                            type="text"
+                            id="register-username"
+                            name="username"
+                            placeholder="Elige tu nombre de aventurero"
+                            autocomplete="username"
+                            minlength="3"
+                            maxlength="30"
+                            pattern="[A-Za-z0-9_.-]+"
+                            title="Usa letras, números, punto, guion o guion bajo."
+                            required>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="register-email">Correo electrónico</label>
+
+                    <div class="input-wrap">
+                        <span class="field-icon" aria-hidden="true">✉</span>
+                        <input
+                            type="email"
+                            id="register-email"
+                            name="email"
+                            placeholder="tu@correo.com"
+                            autocomplete="email"
+                            maxlength="254"
+                            required>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="register-password">Contraseña</label>
+
+                    <div class="input-wrap">
+                        <span class="field-icon" aria-hidden="true">⌑</span>
+                        <input
+                            type="password"
+                            id="register-password"
+                            name="password"
+                            placeholder="Mínimo 8 caracteres"
+                            autocomplete="new-password"
+                            minlength="8"
+                            required>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="register-confirm">Confirmar contraseña</label>
+
+                    <div class="input-wrap">
+                        <span class="field-icon" aria-hidden="true">⌑</span>
+                        <input
+                            type="password"
+                            id="register-confirm"
+                            name="confirm_password"
+                            placeholder="Escribe la contraseña otra vez"
+                            autocomplete="new-password"
+                            minlength="8"
+                            required>
+                    </div>
+                </div>
+
+                <button class="submit-btn" type="submit" id="register-submit">
+                    Crear mi cuenta <span aria-hidden="true">→</span>
+                </button>
+
+                <div
+                    class="message"
+                    id="register-message"
+                    role="status"
+                    aria-live="polite">
+                </div>
+
+            </form>
+
+            <div class="divider">PERSONALIZA TU EXPERIENCIA</div>
+
+            <div class="theme-section">
+                <div class="theme-title">
+                    <strong>Fondo de pantalla</strong>
+                    <span>Se guarda automáticamente</span>
+                </div>
+
+                <div class="theme-options" aria-label="Seleccionar tema">
+
+                    <button
+                        class="theme-option"
+                        type="button"
+                        data-theme-choice="black"
+                        aria-pressed="false">
+                        <span class="swatch black"></span>
+                        Negro
+                    </button>
+
+                    <button
+                        class="theme-option"
+                        type="button"
+                        data-theme-choice="pink"
+                        aria-pressed="false">
+                        <span class="swatch pink"></span>
+                        Rosa
+                    </button>
+
+                    <button
+                        class="theme-option"
+                        type="button"
+                        data-theme-choice="red"
+                        aria-pressed="false">
+                        <span class="swatch red"></span>
+                        Rojo
+                    </button>
+
+                    <button
+                        class="theme-option"
+                        type="button"
+                        data-theme-choice="blue"
+                        aria-pressed="false">
+                        <span class="swatch blue"></span>
+                        Azul
+                    </button>
+
+                </div>
+            </div>
+
+        </section>
+
+        <footer class="footer">
+            Hecho para aventureros · <span>RPG World</span>
+        </footer>
+
+    </main>
+
+    <script>
+        (() => {
+            "use strict";
+
+            const $ = (selector) =>
+                document.querySelector(selector);
+
+            const csrfToken =
+                $('meta[name="csrf-token"]')?.content || "";
+
+            const validThemes = [
+                "black",
+                "pink",
+                "red",
+                "blue"
+            ];
+
+            // -----------------------------------------
+            // Temas: guardar y restaurar la selección
+            // -----------------------------------------
+
+            function applyTheme(theme) {
+                if (!validThemes.includes(theme)) {
+                    theme = "blue";
+                }
+
+                document.documentElement.dataset.theme = theme;
+
+                document.querySelectorAll("[data-theme-choice]")
+                    .forEach(button => {
+                        const selected =
+                            button.dataset.themeChoice === theme;
+
+                        button.classList.toggle("active", selected);
+
+                        button.setAttribute(
+                            "aria-pressed",
+                            String(selected)
+                        );
+                    });
+
+                try {
+                    localStorage.setItem("rpg-world-theme", theme);
+                } catch (error) {
+                    // El tema actual sigue funcionando aunque
+                    // el navegador impida usar almacenamiento local.
+                }
+            }
+
+            let savedTheme = "blue";
+
+            try {
+                savedTheme =
+                    localStorage.getItem("rpg-world-theme") || "blue";
+            } catch (error) {
+                // Utilizar el tema predeterminado.
+            }
+
+            applyTheme(savedTheme);
+
+            document.querySelectorAll("[data-theme-choice]")
+                .forEach(button => {
+                    button.addEventListener("click", () => {
+                        applyTheme(button.dataset.themeChoice);
+                    });
+                });
+
+            // -----------------------------------------
+            // Pestañas
+            // -----------------------------------------
+
+            function switchTab(tab) {
+                const isLogin = tab === "login";
+
+                $("#panel-login").hidden = !isLogin;
+                $("#panel-register").hidden = isLogin;
+
+                $("#tab-login").classList.toggle(
+                    "active",
+                    isLogin
+                );
+
+                $("#tab-register").classList.toggle(
+                    "active",
+                    !isLogin
+                );
+
+                $("#tab-login").setAttribute(
+                    "aria-selected",
+                    String(isLogin)
+                );
+
+                $("#tab-register").setAttribute(
+                    "aria-selected",
+                    String(!isLogin)
+                );
+
+                $("#heading-title").textContent = isLogin
+                    ? "¡Qué bueno verte!"
+                    : "Únete a la aventura";
+
+                $("#heading-description").textContent = isLogin
+                    ? "Inicia sesión para continuar tu aventura."
+                    : "Crea tu cuenta y comienza a jugar.";
+
+                $("#login-message").className = "message";
+                $("#register-message").className = "message";
+            }
+
+            document.querySelectorAll("[data-tab]")
+                .forEach(button => {
+                    button.addEventListener("click", () => {
+                        switchTab(button.dataset.tab);
+                    });
+                });
+
+            // -----------------------------------------
+            // Mensajes y solicitudes HTTP
+            // -----------------------------------------
+
+            function showMessage(element, message, type) {
+                element.textContent = message;
+                element.className = "message show " + type;
+            }
+
+            async function postJson(url, payload) {
+                const headers = {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                };
+
+                if (csrfToken) {
+                    headers["X-CSRF-TOKEN"] = csrfToken;
+                }
+
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers,
+                    credentials: "same-origin",
+                    body: JSON.stringify(payload)
+                });
+
+                let data;
+
+                try {
+                    data = await response.json();
+                } catch (error) {
+                    data = {
+                        success: false,
+                        message: "El servidor devolvió una respuesta no válida."
+                    };
+                }
+
+                return {
+                    response,
+                    data
+                };
+            }
+
+            // -----------------------------------------
+            // Registro
+            // POST /api/auth/register
+            // -----------------------------------------
+
+            $("#panel-register").addEventListener(
+                "submit",
+                async event => {
+                    event.preventDefault();
+
+                    const username =
+                        $("#register-username").value.trim();
+
+                    const email =
+                        $("#register-email").value.trim();
+
+                    const password =
+                        $("#register-password").value;
+
+                    const confirmPassword =
+                        $("#register-confirm").value;
+
+                    const messageElement =
+                        $("#register-message");
+
+                    const submitButton =
+                        $("#register-submit");
+
+                    if (password !== confirmPassword) {
+                        showMessage(
+                            messageElement,
+                            "Las contraseñas no coinciden.",
+                            "error"
+                        );
+                        return;
+                    }
+
+                    submitButton.disabled = true;
+                    submitButton.textContent = "Creando cuenta...";
+
+                    try {
+                        const { response, data } =
+                            await postJson(
+                                "/api/auth/register",
+                                {
+                                    username,
+                                    email,
+                                    password
+                                }
+                            );
+
+                        if (response.ok && data.success) {
+                            $("#panel-register").reset();
+
+                            switchTab("login");
+
+                            $("#login-identity").value = email;
+
+                            showMessage(
+                                $("#login-message"),
+                                data.message ||
+                                    "Cuenta creada correctamente.",
+                                "success"
+                            );
+
+                        } else {
+                            showMessage(
+                                messageElement,
+                                data.message ||
+                                    "No se pudo crear la cuenta.",
+                                "error"
+                            );
+                        }
+
+                    } catch (error) {
+                        showMessage(
+                            messageElement,
+                            "No se pudo conectar con el servidor.",
+                            "error"
+                        );
+
+                    } finally {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML =
+                            'Crear mi cuenta <span aria-hidden="true">→</span>';
+                    }
+                }
+            );
+
+            // -----------------------------------------
+            // Login
+            // POST /api/auth/login
+            // -----------------------------------------
+
+            $("#panel-login").addEventListener(
+                "submit",
+                async event => {
+                    event.preventDefault();
+
+                    const identity =
+                        $("#login-identity").value.trim();
+
+                    const password =
+                        $("#login-password").value;
+
+                    const messageElement =
+                        $("#login-message");
+
+                    const submitButton =
+                        $("#login-submit");
+
+                    submitButton.disabled = true;
+                    submitButton.textContent = "Iniciando sesión...";
+
+                    try {
+                        const { response, data } =
+                            await postJson(
+                                "/api/auth/login",
+                                {
+                                    username: identity,
+                                    email: identity,
+                                    password
+                                }
+                            );
+
+                        if (response.status === 404) {
+                            showMessage(
+                                messageElement,
+                                "El endpoint de login aún no está creado: /api/auth/login.",
+                                "error"
+                            );
+
+                        } else if (response.ok && data.success) {
+                            showMessage(
+                                messageElement,
+                                data.message ||
+                                    "Inicio de sesión correcto.",
+                                "success"
+                            );
+
+                            if (data.redirect) {
+                                window.location.assign(data.redirect);
+                            }
+
+                        } else {
+                            showMessage(
+                                messageElement,
+                                data.message ||
+                                    "No se pudo iniciar sesión.",
+                                "error"
+                            );
+                        }
+
+                    } catch (error) {
+                        showMessage(
+                            messageElement,
+                            "No se pudo conectar con el servidor.",
+                            "error"
+                        );
+
+                    } finally {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML =
+                            'Entrar a mi cuenta <span aria-hidden="true">→</span>';
+                    }
+                }
+            );
+
+            // -----------------------------------------
+            // Enlace de recuperación aún no implementado
+            // -----------------------------------------
+
+            $("#forgot-link").addEventListener(
+                "click",
+                event => {
+                    event.preventDefault();
+
+                    showMessage(
+                        $("#login-message"),
+                        "La recuperación de contraseña todavía no está implementada.",
+                        "error"
+                    );
+                }
+            );
+
+        })();
+    </script>
+
+</body>
+</html>

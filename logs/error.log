@@ -1,0 +1,44 @@
+[2026-10-08 12:43:49] Traceback (most recent call last):
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 1283, in dispatch
+    self.handle_web_or_static(
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 1713, in handle_web_or_static
+    html = self.interpreter.render(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 874, in render
+    exec(
+  File "<string>", line 3, in <module>
+NameError: name 'print' is not defined
+
+[2026-10-08 12:43:53] Traceback (most recent call last):
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 1283, in dispatch
+    self.handle_web_or_static(
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 1713, in handle_web_or_static
+    html = self.interpreter.render(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 874, in render
+    exec(
+  File "<string>", line 3, in <module>
+NameError: name 'print' is not defined
+
+[2026-10-08 12:43:55] Traceback (most recent call last):
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 1283, in dispatch
+    self.handle_web_or_static(
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 1713, in handle_web_or_static
+    html = self.interpreter.render(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 874, in render
+    exec(
+  File "<string>", line 3, in <module>
+NameError: name 'print' is not defined
+
+[2026-10-08 12:44:03] Traceback (most recent call last):
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 1283, in dispatch
+    self.handle_web_or_static(
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 1713, in handle_web_or_static
+    html = self.interpreter.render(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ecarrizales\edgar\app\GIT\MisAPK\RPGServer\server.py", line 874, in render
+    exec(
+  File "<string>", line 3, in <module>
+NameError: name 'print' is not defined
+

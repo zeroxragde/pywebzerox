@@ -1,0 +1,64 @@
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "server_name": "RPG Web Server",
+        "document_root": "./web",
+        "static_root": "./static",
+        "api_root": "./api",
+        "max_body_size_mb": 10
+    },
+
+    "web": {
+        "extension": ".web",
+        "index": "index.web",
+        "interpreter": true,
+        "debug": true
+    },
+
+    "session": {
+        "enabled": true,
+        "cookie_name": "RPGSESSION",
+        "lifetime_minutes": 60,
+        "renew_on_request": true,
+        "http_only": true,
+        "secure": false,
+        "same_site": "Lax",
+        "path": "/"
+    },
+
+    "csrf": {
+        "enabled": true,
+        "token_length": 32,
+        "field_name": "_token",
+        "header_name": "X-CSRF-TOKEN",
+        "protect_methods": [
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE"
+        ],
+        "verify_origin": true,
+        "excluded_paths": []
+    },
+
+    "swagger": {
+        "enabled": true,
+        "path": "/swagger",
+        "json_path": "/swagger/openapi.json",
+        "title": "RPG API",
+        "version": "1.0.0",
+        "ui_cdn_base": "https://unpkg.com/swagger-ui-dist@5"
+    },
+
+    "security": {
+        "directory_listing": false,
+        "allow_hidden_files": false
+    },
+
+    "logging": {
+        "enabled": true,
+        "access_log": "./logs/access.log",
+        "error_log": "./logs/error.log"
+    }
+}

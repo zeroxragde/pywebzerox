@@ -1,0 +1,8 @@
+<h1>Hola</h1>
+
+<?web
+nombre = "Master"
+print("Bienvenido " + nombre)
+?>
+
+<p>Fin</p>
