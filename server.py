@@ -20,6 +20,8 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
+from routes import RouteManager
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
@@ -65,6 +67,13 @@ DEFAULT_CONFIG = {
         "title": "RPG API",
         "version": "1.0.0",
         "ui_cdn_base": "https://unpkg.com/swagger-ui-dist@5"
+    },
+    "routing": {
+        "enabled": True,
+        "routes_file": "./routes.py",
+        "auto_discover": True,
+        "api_auto_discover": False,
+        "legacy_web_prefix_redirect": True
     },
     "security": {
         "directory_listing": False,
@@ -298,54 +307,111 @@ class WebResponse:
 
 
 class ApiRouter:
-    def __init__(self, api_root):
+    """Resuelve endpoints declarados en API_ROUTES dentro de routes.py.
+
+    Por defecto NO publica automáticamente todos los .py de api/.
+    El destino físico de cada endpoint se configura expresamente en routes.py.
+    """
+
+    def __init__(self, api_root, route_manager, project_root=None, auto_discover=False):
         self.api_root = os.path.abspath(api_root)
+        self.route_manager = route_manager
+        self.project_root = os.path.abspath(project_root or BASE_DIR)
+        self.auto_discover = bool(auto_discover)
         self.cache = {}
         self.lock = threading.RLock()
-        self.route_signature = None
 
-    def _signature(self):
-        files = []
-        if not os.path.isdir(self.api_root):
-            return ()
-        for root, _, names in os.walk(self.api_root):
-            for name in names:
-                if not name.endswith(".py") or name.startswith("_"):
-                    continue
-                path = os.path.join(root, name)
-                try:
-                    files.append((path, os.path.getmtime(path), os.path.getsize(path)))
-                except OSError:
-                    pass
-        return tuple(sorted(files))
-
-    def refresh(self):
-        signature = self._signature()
-        if signature != self.route_signature:
-            with self.lock:
-                if signature != self.route_signature:
-                    self.cache.clear()
-                    self.route_signature = signature
-
-    def _safe_path(self, path):
+    def _safe_path(self, root, path):
         try:
-            return os.path.commonpath([self.api_root, os.path.abspath(path)]) == self.api_root
-        except ValueError:
+            return os.path.commonpath([
+                os.path.abspath(root),
+                os.path.abspath(path)
+            ]) == os.path.abspath(root)
+        except (ValueError, OSError):
             return False
+
+    def _route_definition(self, entry):
+        if isinstance(entry, str):
+            return {"file": entry}
+        if isinstance(entry, dict):
+            return entry
+        return None
+
+    def _resolve_target(self, definition):
+        if not isinstance(definition, dict):
+            return None
+
+        relative_file = definition.get("file")
+        if not isinstance(relative_file, str) or not relative_file.strip():
+            return None
+        if os.path.isabs(relative_file):
+            return None
+
+        # Las rutas de archivo se expresan respecto a la raíz del proyecto,
+        # por ejemplo: api/auth/register.py o controllers/auth/register.py.
+        target = os.path.abspath(
+            os.path.join(self.project_root, relative_file)
+        )
+        if not self._safe_path(self.project_root, target):
+            return None
+
+        if not target.endswith(".py"):
+            target += ".py"
+
+        # Solo se permiten destinos Python; evitar publicar rutas ocultas.
+        relative = os.path.relpath(target, self.project_root)
+        if any(part.startswith(".") for part in relative.split(os.sep)):
+            return None
+
+        if not os.path.isfile(target):
+            return None
+
+        return target
+
+    def _configured_routes(self):
+        routes = self.route_manager.get_api_routes()
+        if not isinstance(routes, dict):
+            routes = {}
+        result = dict(routes)
+
+        # Compatibilidad opcional. Desactivada por defecto para que las URLs
+        # públicas de la API se administren desde routes.py.
+        if self.auto_discover and os.path.isdir(self.api_root):
+            for root, _, names in os.walk(self.api_root):
+                for name in sorted(names):
+                    if not name.endswith(".py") or name.startswith("_"):
+                        continue
+                    physical_path = os.path.join(root, name)
+                    relative = os.path.relpath(
+                        physical_path,
+                        self.project_root
+                    ).replace(os.sep, "/")[:-3]
+                    parts = relative.split("/")
+                    if parts[-1] == "index":
+                        parts = parts[:-1]
+                    if parts and parts[-1] == "[id]":
+                        parts[-1] = "{id}"
+                    route = "/api" + ("/" + "/".join(parts) if parts else "")
+                    result.setdefault(route, {"file": relative + ".py"})
+
+        return result
 
     def _load_module(self, path, route):
         path = os.path.abspath(path)
         try:
             mtime = os.path.getmtime(path)
+            size = os.path.getsize(path)
         except OSError:
             return None
 
         with self.lock:
             cached = self.cache.get(path)
-            if cached and cached[0] == mtime:
+            if cached and cached[0] == (mtime, size):
                 return cached[1], cached[2], dict(cached[3])
 
-            module_name = "rpg_api_" + hashlib.sha256(path.encode("utf-8")).hexdigest()
+            module_name = "rpg_api_" + hashlib.sha256(
+                path.encode("utf-8")
+            ).hexdigest()
             sys.modules.pop(module_name, None)
             spec = importlib.util.spec_from_file_location(module_name, path)
             if spec is None or spec.loader is None:
@@ -354,58 +420,76 @@ class ApiRouter:
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
+
             params = {}
-            self.cache[path] = (mtime, module, route, params)
+            self.cache[path] = ((mtime, size), module, route, params)
             return module, route, params
 
     def discover(self):
-        self.refresh()
-        routes = []
-        if not os.path.isdir(self.api_root):
-            return routes
+        """Lista solo las rutas API registradas y cuyos scripts existen."""
+        discovered = []
+        definitions = self._configured_routes()
 
-        for root, _, names in os.walk(self.api_root):
-            for name in sorted(names):
-                if not name.endswith(".py") or name.startswith("_"):
-                    continue
-                path = os.path.join(root, name)
-                relative = os.path.relpath(path, self.api_root).replace(os.sep, "/")[:-3]
-                parts = relative.split("/")
-                if parts[-1] == "index":
-                    parts = parts[:-1]
-                route = "/api" + ("/" + "/".join(parts) if parts else "")
-                routes.append((route, path))
-        return routes
+        for route, entry in sorted(definitions.items(), key=lambda item: str(item[0])):
+            if not isinstance(route, str):
+                continue
+
+            normalized_route = RouteManager._normalize_path(route)
+            if normalized_route is None:
+                continue
+            if normalized_route != "/api" and not normalized_route.startswith("/api/"):
+                continue
+
+            definition = self._route_definition(entry)
+            target = self._resolve_target(definition)
+            if target is None:
+                continue
+
+            discovered.append((normalized_route, target, definition))
+
+        return discovered
 
     def resolve(self, request_path):
-        self.refresh()
-        if request_path != "/api" and not request_path.startswith("/api/"):
+        path = RouteManager._normalize_path(request_path)
+        if path is None:
+            return None
+        if path != "/api" and not path.startswith("/api/"):
             return None
 
-        relative = request_path[4:].strip("/")
-        parts = [part for part in relative.split("/") if part] if relative else ["index"]
+        definitions = self._configured_routes()
+        ordered_routes = sorted(
+            definitions.items(),
+            key=lambda item: ("{" in str(item[0]), -len(str(item[0])))
+        )
 
-        direct = os.path.join(self.api_root, *parts) + ".py"
-        if self._safe_path(direct) and os.path.isfile(direct):
-            route = "/api/" + "/".join(parts)
-            return self._load_module(direct, route)
+        for route_template, entry in ordered_routes:
+            if not isinstance(route_template, str):
+                continue
 
-        index_path = os.path.join(self.api_root, *parts, "index.py")
-        if self._safe_path(index_path) and os.path.isfile(index_path):
-            route = "/api/" + "/".join(parts)
-            return self._load_module(index_path, route)
+            route_template = RouteManager._normalize_path(route_template)
+            if route_template is None:
+                continue
+            if route_template != "/api" and not route_template.startswith("/api/"):
+                continue
 
-        if len(parts) >= 2:
-            parent = parts[:-1]
-            dynamic_path = os.path.join(self.api_root, *parent, "[id].py")
-            if self._safe_path(dynamic_path) and os.path.isfile(dynamic_path):
-                route = "/api/" + "/".join(parent + ["[id]"])
-                result = self._load_module(dynamic_path, route)
-                if result:
-                    module, route, params = result
-                    params = dict(params)
-                    params["id"] = parts[-1]
-                    return module, route, params
+            params = RouteManager._template_match(route_template, path)
+            if params is None:
+                continue
+
+            definition = self._route_definition(entry)
+            target = self._resolve_target(definition)
+            if target is None:
+                continue
+
+            loaded = self._load_module(target, route_template)
+            if not loaded:
+                continue
+
+            module, matched_route, _cached_params = loaded
+            # Devolver la definición para que los métodos y metadatos provengan
+            # de routes.py, con fallback a `methods` dentro del endpoint.
+            return module, matched_route, params, definition
+
         return None
 
 
@@ -421,7 +505,7 @@ class SwaggerBuilder:
 
     def build(self):
         paths = {}
-        for route, file_path in self.router.discover():
+        for route, file_path, definition in self.router.discover():
             try:
                 result = self.router._load_module(file_path, route)
             except Exception:
@@ -431,8 +515,8 @@ class SwaggerBuilder:
 
             module, _, _ = result
             docs = getattr(module, "swagger", {}) or {}
-            methods = getattr(module, "methods", ["GET"])
-            openapi_route = re.sub(r"\[([^\]]+)\]", r"{\1}", route)
+            methods = definition.get("methods") or getattr(module, "methods", ["GET"])
+            openapi_route = route
 
             for method in methods:
                 method = str(method).lower()
@@ -548,6 +632,7 @@ class RPGRequestHandler(BaseHTTPRequestHandler):
     interpreter = None
     api_router = None
     swagger_builder = None
+    route_manager = None
 
     def log_message(self, fmt, *args):
         if self.logger:
@@ -664,9 +749,11 @@ class RPGRequestHandler(BaseHTTPRequestHandler):
             else:
                 api_result = self.api_router.resolve(request.path)
                 if api_result:
-                    module, _route, params = api_result
+                    module, _route, params, definition = api_result
                     request.params = params
                     request.api_module = module
+                    request.api_methods = definition.get("methods")
+                    request.route_name = definition.get("name")
                     response = self.handle_api(module, request)
                 else:
                     request.api_module = None
@@ -753,7 +840,9 @@ window.onload = function() {{
         return None
 
     def handle_api(self, module, request):
-        methods = getattr(module, "methods", None)
+        methods = getattr(request, "api_methods", None)
+        if methods is None:
+            methods = getattr(module, "methods", None)
         if methods is not None:
             allowed = {str(method).upper() for method in methods}
             if request.method not in allowed:
@@ -785,99 +874,101 @@ window.onload = function() {{
     def handle_web_or_static(self, request):
         path = request.path
 
-        # Los endpoints y la documentación tienen espacios separados.
+        # La API tiene un espacio reservado y nunca se resuelve como página .web.
         if path == "/api" or path.startswith("/api/"):
-            return WebResponse().json({"success": False, "message": "API endpoint not found"}, 404)
+            return WebResponse().json(
+                {"success": False, "message": "API endpoint not found"},
+                404
+            )
 
-        # Archivos estáticos: /static/css/site.css
-        static_root = self._absolute_path(self.config.get("server", "static_root", default="./static"))
-        document_root = self._absolute_path(self.config.get("server", "document_root", default="./web"))
+        # Recursos estáticos: /static/css/site.css
+        static_root = self._absolute_path(
+            self.config.get("server", "static_root", default="./static")
+        )
 
         if path == "/static" or path.startswith("/static/"):
             relative = path[len("/static"):].lstrip("/")
-            static_path = os.path.abspath(os.path.join(static_root, relative))
+            static_path = os.path.abspath(
+                os.path.join(static_root, relative)
+            )
             if not self._safe_path(static_root, static_path):
                 return WebResponse().text("Forbidden", 403)
             return self.serve_file(static_path)
 
-        # RUTAS VIRTUALES:
-        # /web/login       -> web/login.web
-        # /web/admin       -> web/admin.web o web/admin/index.web
-        # /web/admin/      -> web/admin/index.web
-        # /web/admin/login -> web/admin/login.web
-        # Este prefijo separado evita conflictos con /api/...
-        if path == "/web" or path.startswith("/web/"):
-            return self.serve_virtual_web(path, document_root)
+        # Rutas virtuales limpias: /login -> web/login.web
+        # Las rutas legacy /web/login se redirigen a /login.
+        if not self.config.get("routing", "enabled", default=True):
+            return self._serve_legacy_web_path(request)
 
-        # Mantiene compatibilidad con URLs antiguas y la raíz /.
-        relative_path = path.lstrip("/")
-        web_path = os.path.abspath(os.path.join(document_root, relative_path))
-        if not self._safe_path(document_root, web_path):
-            return WebResponse().text("Forbidden", 403)
+        if self.route_manager is None:
+            return WebResponse().text("Internal Server Error: route manager not configured", 500)
 
-        if path == "/" or path.endswith("/") or os.path.isdir(web_path):
-            web_path = os.path.join(web_path, self.config.get("web", "index", default="index.web"))
+        match = self.route_manager.resolve(path)
 
-        if not self._safe_path(document_root, web_path):
-            return WebResponse().text("Forbidden", 403)
-        if not os.path.isfile(web_path):
+        if match is None:
             return WebResponse().text("Not Found", 404)
 
-        extension = self.config.get("web", "extension", default=".web")
-        if web_path.endswith(extension):
-            return self.render_web_file(web_path, request)
-        return self.serve_file(web_path)
+        # Redirección a URL canónica, preservando query string.
+        redirect_to = match.get("redirect")
+        if redirect_to:
+            if request.query_string:
+                redirect_to += "?" + request.query_string
+            response = WebResponse().text("Redirecting", 301)
+            response.set_header("Location", redirect_to)
+            return response
 
-    def serve_virtual_web(self, request_path, document_root):
+        page_path = match.get("file")
+        if not page_path:
+            return WebResponse().text("Not Found", 404)
+
+        request.params = match.get("params", {})
+        request.route_name = match.get("name")
+
+        methods = match.get("methods")
+        if methods:
+            allowed = {str(method).upper() for method in methods}
+            if request.method not in allowed:
+                response = WebResponse().text("Method Not Allowed", 405)
+                response.set_header("Allow", ", ".join(sorted(allowed)))
+                return response
+
+        return self.render_web_file(page_path, request)
+
+    def _serve_legacy_web_path(self, request):
+        """Compatibilidad opcional con el modo anterior de publicar /web/... ."""
+        path = request.path
+        document_root = self._absolute_path(
+            self.config.get("server", "document_root", default="./web")
+        )
         extension = self.config.get("web", "extension", default=".web")
         index_name = self.config.get("web", "index", default="index.web")
 
-        if request_path == "/web":
-            relative = ""
-            has_trailing_slash = True
+        if path == "/web" or path.startswith("/web/"):
+            relative = path[len("/web"):].lstrip("/")
         else:
-            relative = request_path[len("/web/"):]
-            has_trailing_slash = request_path.endswith("/")
+            relative = path.lstrip("/")
 
-        relative = unquote(relative).strip("/")
         if not relative:
             candidate = os.path.join(document_root, index_name)
-            if not self._safe_path(document_root, candidate):
-                return WebResponse().text("Forbidden", 403)
-            return self.render_web_file(candidate, None) if os.path.isfile(candidate) else WebResponse().text("Not Found", 404)
-
-        requested = os.path.abspath(os.path.join(document_root, relative))
-        if not self._safe_path(document_root, requested):
-            return WebResponse().text("Forbidden", 403)
-
-        # /web/admin/ -> web/admin/index.web
-        if has_trailing_slash or os.path.isdir(requested):
-            candidate = os.path.join(requested, index_name)
-            if not self._safe_path(document_root, candidate):
-                return WebResponse().text("Forbidden", 403)
-            if os.path.isfile(candidate):
-                return self.render_web_file(candidate, None)
-            return WebResponse().text("Not Found", 404)
-
-        # Si se indica explícitamente .web, resolver ese archivo.
-        if requested.endswith(extension):
-            candidate = requested
         else:
-            # /web/login -> web/login.web
-            candidate = requested + extension
+            requested = os.path.abspath(
+                os.path.join(document_root, unquote(relative))
+            )
+            if not self._safe_path(document_root, requested):
+                return WebResponse().text("Forbidden", 403)
+
+            if os.path.isdir(requested):
+                candidate = os.path.join(requested, index_name)
+            elif requested.endswith(extension):
+                candidate = requested
+            else:
+                candidate = requested + extension
 
         if not self._safe_path(document_root, candidate):
             return WebResponse().text("Forbidden", 403)
-        if os.path.isfile(candidate):
-            return self.render_web_file(candidate, None)
-
-        # Permitir /web/carpeta si contiene index.web.
-        if os.path.isdir(requested):
-            index_path = os.path.join(requested, index_name)
-            if self._safe_path(document_root, index_path) and os.path.isfile(index_path):
-                return self.render_web_file(index_path, None)
-
-        return WebResponse().text("Not Found", 404)
+        if not os.path.isfile(candidate):
+            return WebResponse().text("Not Found", 404)
+        return self.render_web_file(candidate, request)
 
     @staticmethod
     def _absolute_path(path):
@@ -892,22 +983,20 @@ window.onload = function() {{
         except ValueError:
             return False
 
-    def render_web_file(self, path, request=None):
-        document_root = self._absolute_path(self.config.get("server", "document_root", default="./web"))
+    def render_web_file(self, path, request):
+        document_root = self._absolute_path(
+            self.config.get("server", "document_root", default="./web")
+        )
+        path = os.path.abspath(path)
+
         if not self._safe_path(document_root, path):
             return WebResponse().text("Forbidden", 403)
         if not os.path.isfile(path):
             return WebResponse().text("Not Found", 404)
 
-        if request is None:
-            # Las rutas virtuales llegan aquí desde dispatch; usar la petición actual.
-            request = getattr(self, "_current_request", None)
-        if request is None:
-            return WebResponse().text("Internal Server Error", 500)
-
         extension = self.config.get("web", "extension", default=".web")
         if not path.endswith(extension):
-            return self.serve_file(path)
+            return WebResponse().text("Not Found", 404)
 
         with open(path, "r", encoding="utf-8") as file:
             source = file.read()
@@ -918,7 +1007,13 @@ window.onload = function() {{
             "port": self.config.get("server", "port", default=8080)
         }
         csrf_token = request.session.csrf_token if request.session else ""
-        rendered = self.interpreter.render(source, request, request.session, server_info, csrf_token)
+        rendered = self.interpreter.render(
+            source,
+            request,
+            request.session,
+            server_info,
+            csrf_token
+        )
         return WebResponse().html(rendered)
 
     def serve_file(self, path):
@@ -944,9 +1039,11 @@ window.onload = function() {{
 
             api_result = self.api_router.resolve(request.path)
             if api_result:
-                module, _route, params = api_result
+                module, _route, params, definition = api_result
                 request.params = params
                 request.api_module = module
+                request.api_methods = definition.get("methods")
+                request.route_name = definition.get("name")
                 return self.handle_api(module, request)
 
             request.api_module = None
@@ -992,7 +1089,7 @@ print("Página procesada por Python.")
 ?>
 <p>Visitas de esta sesión: <?= count ?></p>
 <form method="POST">@csrf<button type="submit">Probar POST</button></form>
-<p><a href="/web/login">Abrir login</a></p>
+<p><a href="/login">Abrir login</a></p>
 </body>
 </html>'''
     with open(index_path, "w", encoding="utf-8") as file:
@@ -1012,7 +1109,31 @@ def start_server():
     if not os.path.isabs(api_root):
         api_root = os.path.join(BASE_DIR, api_root)
 
-    api_router = ApiRouter(api_root)
+    routes_file = config.get("routing", "routes_file", default="./routes.py")
+    if not os.path.isabs(routes_file):
+        routes_file = os.path.join(BASE_DIR, routes_file)
+
+    document_root = config.get("server", "document_root", default="./web")
+    if not os.path.isabs(document_root):
+        document_root = os.path.join(BASE_DIR, document_root)
+
+    route_manager = RouteManager(
+        document_root=document_root,
+        routes_file=routes_file,
+        extension=config.get("web", "extension", default=".web"),
+        index_name=config.get("web", "index", default="index.web"),
+        auto_discover=config.get("routing", "auto_discover", default=True),
+        legacy_web_prefix_redirect=config.get(
+            "routing", "legacy_web_prefix_redirect", default=True
+        )
+    )
+
+    api_router = ApiRouter(
+        api_root=api_root,
+        route_manager=route_manager,
+        project_root=BASE_DIR,
+        auto_discover=config.get("routing", "api_auto_discover", default=False)
+    )
     swagger_builder = SwaggerBuilder(api_router, config)
 
     RPGRequestHandler.config = config
@@ -1021,6 +1142,7 @@ def start_server():
     RPGRequestHandler.interpreter = interpreter
     RPGRequestHandler.api_router = api_router
     RPGRequestHandler.swagger_builder = swagger_builder
+    RPGRequestHandler.route_manager = route_manager
 
     host = config.get("server", "host", default="0.0.0.0")
     port = int(config.get("server", "port", default=8080))
@@ -1042,7 +1164,8 @@ def start_server():
         print(f"Swagger  : http://127.0.0.1:{port}{swagger_path}")
     else:
         print("Swagger  : DESACTIVADO")
-    print("Rutas    : /web/nombre -> web/nombre.web")
+    print("Rutas    : /login -> web/login.web")
+    print(f"Routefile: {os.path.abspath(routes_file)}")
     print("========================================")
     print()
 

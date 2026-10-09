@@ -8,14 +8,12 @@
         "api_root": "./api",
         "max_body_size_mb": 10
     },
-
     "web": {
         "extension": ".web",
         "index": "index.web",
         "interpreter": true,
         "debug": true
     },
-
     "session": {
         "enabled": true,
         "cookie_name": "RPGSESSION",
@@ -26,7 +24,6 @@
         "same_site": "Lax",
         "path": "/"
     },
-
     "csrf": {
         "enabled": true,
         "token_length": 32,
@@ -41,7 +38,6 @@
         "verify_origin": true,
         "excluded_paths": []
     },
-
     "swagger": {
         "enabled": true,
         "path": "/swagger",
@@ -50,15 +46,20 @@
         "version": "1.0.0",
         "ui_cdn_base": "https://unpkg.com/swagger-ui-dist@5"
     },
-
     "security": {
         "directory_listing": false,
         "allow_hidden_files": false
     },
-
     "logging": {
         "enabled": true,
         "access_log": "./logs/access.log",
         "error_log": "./logs/error.log"
+    },
+    "routing": {
+        "enabled": true,
+        "routes_file": "./routes.py",
+        "auto_discover": true,
+        "api_auto_discover": false,
+        "legacy_web_prefix_redirect": true
     }
 }
